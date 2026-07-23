@@ -26,3 +26,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Generated images
+backend/static/*.png
+
+# Sample audio
+backend/sample.flac
