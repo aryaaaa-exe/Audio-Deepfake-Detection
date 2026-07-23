@@ -11,7 +11,7 @@ CORS(app)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
+os.makedirs("static", exist_ok=True)
 
 @app.route("/")
 def home():

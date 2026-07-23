@@ -17,28 +17,39 @@ from preprocessing.patch_generator import (
     flatten_patches
 )
 
-#Load Model
+#load model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = PS3DT()
 
-MODEL_PATH = "weights/best_param.pth"
+model = None
+def load_model():
+    global model
 
-if not os.path.exists(MODEL_PATH):
-    MODEL_PATH = hf_hub_download(
-        repo_id="aryaaaa-exe/audio-deepfake-weights",
-        filename="best_param.pth"
-    )
+    if model is not None:
+        return model
 
-state_dict = torch.load(MODEL_PATH, map_location=device)
+    model = PS3DT()
 
-model.load_state_dict(state_dict)
+    MODEL_PATH = "weights/best_param.pth"
 
-model.to(device)
-model.eval()
+    if not os.path.exists(MODEL_PATH):
+        MODEL_PATH = hf_hub_download(
+            repo_id="aryaaaa-exe/audio-deepfake-weights",
+            filename="best_param.pth"
+        )
+
+    state_dict = torch.load(MODEL_PATH, map_location=device)
+
+    model.load_state_dict(state_dict)
+
+    model.to(device)
+
+    model.eval()
+
+    return model
 
 #Prediction Function
 def predict(audio_path):
-
+    model = load_model()
     # Load audio
     waveform = load_audio(audio_path)
 
