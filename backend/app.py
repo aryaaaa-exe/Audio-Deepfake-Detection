@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, url_for
 from flask_cors import CORS
 import os
 import matplotlib.pyplot as plt
@@ -52,7 +52,11 @@ def predict_audio():
             "prediction": prediction,
 
             "confidence": round(confidence, 2),
-            "spectrogram": request.host_url + "static/" + mel_filename
+            "spectrogram": url_for(
+                "static",
+                filename=mel_filename,
+                _external=True
+            )
             # "spectrogram": f"http://127.0.0.1:5000/static/{mel_filename}"
 
         })
