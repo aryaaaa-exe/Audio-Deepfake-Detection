@@ -1,6 +1,7 @@
 import torch
 import matplotlib.pyplot as plt
 import uuid
+from huggingface_hub import hf_hub_download
 import os
 
 from model.ps3dt import PS3DT
@@ -19,10 +20,16 @@ from preprocessing.patch_generator import (
 #Load Model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = PS3DT()
-state_dict = torch.load(
-    "weights/best_param.pth",
-    map_location=device
-)
+
+MODEL_PATH = "weights/best_param.pth"
+
+if not os.path.exists(MODEL_PATH):
+    MODEL_PATH = hf_hub_download(
+        repo_id="aryaaaa-exe/audio-deepfake-weights",
+        filename="best_param.pth"
+    )
+
+state_dict = torch.load(MODEL_PATH, map_location=device)
 
 model.load_state_dict(state_dict)
 
