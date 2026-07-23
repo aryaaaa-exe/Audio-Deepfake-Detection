@@ -1,0 +1,11 @@
+Flask
+Flask-Cors
+torch
+torchaudio
+torchvision
+numpy
+librosa
+matplotlib
+soundfile
+Pillow
+timm

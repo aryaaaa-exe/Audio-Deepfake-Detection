@@ -52,8 +52,8 @@ def predict_audio():
             "prediction": prediction,
 
             "confidence": round(confidence, 2),
-
-            "spectrogram": f"http://127.0.0.1:5000/static/{mel_filename}"
+            "spectrogram": request.host_url + "static/" + mel_filename
+            # "spectrogram": f"http://127.0.0.1:5000/static/{mel_filename}"
 
         })
 
@@ -72,4 +72,4 @@ def predict_audio():
 
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(host="0.0.0.0", port=5000)
