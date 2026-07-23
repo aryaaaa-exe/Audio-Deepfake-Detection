@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environment
+venv/
+.env
+
+# Model weights
+*.pth
+
+# Uploads
+backend/uploads/
+
+# React
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
