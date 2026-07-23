@@ -4,6 +4,8 @@ import uuid
 from huggingface_hub import hf_hub_download
 import os
 
+os.makedirs("static", exist_ok=True)
+
 from model.ps3dt import PS3DT
 from preprocessing.preprocess import (
     load_audio,

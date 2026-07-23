@@ -3,11 +3,15 @@ from flask_cors import CORS
 import os
 import matplotlib.pyplot as plt
 import uuid
+import traceback
 
 from inference import predict
 
 app = Flask(__name__)
-CORS(app)
+CORS(
+    app,
+    resources={r"/*": {"origins": "*"}}
+)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -61,12 +65,18 @@ def predict_audio():
 
         })
 
+    # except Exception as e:
+
+    #     return jsonify({
+
+    #         "error": str(e)
+
+    #     }), 500
     except Exception as e:
+        traceback.print_exc()
 
         return jsonify({
-
             "error": str(e)
-
         }), 500
 
     finally:
@@ -77,3 +87,10 @@ def predict_audio():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
+@app.after_request
+def after_request(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    return response
