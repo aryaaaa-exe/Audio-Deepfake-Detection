@@ -1,6 +1,9 @@
+from functools import partial
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from timm.models.vision_transformer import DropPath, Mlp
+
 
 #Preparing the patches for input in the transformer
 class EncoderInput(nn.Module):
@@ -21,7 +24,6 @@ class EncoderInput(nn.Module):
     embedded_patches=self.patch_embed(x)
     output=embedded_patches+self.pos_embed
     return output
-
 
 
 #Transformer Encoder Block as exactly same as used in msm-mae model
@@ -97,7 +99,8 @@ class BlockKBiasZero(nn.Module):
         #layernorm->mlp->droppath
         x=x+self.drop_path(self.mlp(self.norm2(x)))
         return x
-    
+
+
 # we want to stack 12 encoder blocks as done in the paper
 from functools import partial
 
@@ -121,7 +124,8 @@ class Encoder(nn.Module):
     for blk in self.blocks: #Passes output of one encoder into next encoder.
       x=blk(x)
     return x
-  
+
+
 def concatenate(X):
     #X shape:(batch_size,160,768)
 
@@ -141,7 +145,7 @@ def concatenate(X):
     frame_vector=X_grid.reshape(B,num_frame,num_freq_patch*768)
 
     return frame_vector
-  
+
 class OutputBlock(nn.Module):
     def __init__(self):
         super().__init__()
@@ -161,6 +165,12 @@ class OutputBlock(nn.Module):
         x=x.mean(dim=1)  # mean pooling across frames  # x has 768 dim
         x=self.sequential_2(x) # gives bonafied or synthetic prob
         return x
+
+
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 class PS3DT(nn.Module):
   def __init__(self):

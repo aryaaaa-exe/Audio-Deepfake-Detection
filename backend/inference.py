@@ -1,151 +1,106 @@
-import torch
-import matplotlib.pyplot as plt
-import uuid
+"""
+Inference layer that sits between the Streamlit frontend and the PS3DT model.
+
+Handles: device selection, checkpoint loading (with a graceful fallback to
+randomly-initialised weights so the app still runs end-to-end before a
+trained checkpoint is added), and turning raw audio bytes into a result
+dictionary the UI can render directly.
+"""
 from huggingface_hub import hf_hub_download
 import os
+import time
+from dataclasses import dataclass, field
 
-os.makedirs("static", exist_ok=True)
+import torch
 
-from model.ps3dt import PS3DT
-from preprocessing.preprocess import (
-    load_audio,
-    preprocess_audio,
-    target_length,
-    target_sr
-)
-from preprocessing.feature_extraction import extract_mel_spectrogram
-from preprocessing.patch_generator import (
-    create_patches,
-    flatten_patches
-)
+from .model import PS3DT
+from .audio_processing import audio_to_model_input
+#from .download import ensure_checkpoint
 
-#load model
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# CHECKPOINT_CANDIDATES = [
+#     os.path.join("checkpoints", "best_param.pth"),
+#     os.path.join("checkpoints", "finetune.pth"),
+# ]
 
-model = None
+
+@dataclass
+class PredictionResult:
+    label: str                 # "BONAFIDE" or "SPOOF"
+    prob_real: float           # 0-100
+    prob_fake: float           # 0-100
+    waveform: "np.ndarray"
+    mel: "np.ndarray"
+    sample_rate: int
+    inference_ms: float
+    demo_mode: bool
+    checkpoint_name: str = field(default="")
+
+
+def get_device() -> torch.device:
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+# def find_checkpoint():
+#     for candidate in CHECKPOINT_CANDIDATES:
+#         if os.path.exists(candidate):
+#             return candidate
+#     return None
+
+
 def load_model():
-    global model
+    device = get_device()
+    model = PS3DT().to(device)
 
-    if model is not None:
-        return model
+    # checkpoint_path = find_checkpoint()
+    # if checkpoint_path is None:
+    #     # Not found locally — try pulling it from a configured remote URL
+    #     # (see backend/download.py). No-ops if no URL is configured.
+    #     checkpoint_path = ensure_checkpoint()
 
-    model = PS3DT()
+    checkpoint_path = hf_hub_download(
+        repo_id="aryaaaa-exe/ps3dt-audio-deepfake",
+        filename="best_param.pth"
+    )
+    checkpoint_name = os.path.basename(checkpoint_path)
+    # demo_mode = checkpoint_path is None
+    # checkpoint_name = ""
 
-    MODEL_PATH = "weights/best_param.pth"
+    # if checkpoint_path is not None:
+    #     checkpoint_name = os.path.basename(checkpoint_path)
+    state = torch.load(checkpoint_path, map_location=device)
+        # Support both a raw state_dict and a training-checkpoint dict
+        # that wraps it under "model_state_dict".
+    if isinstance(state, dict) and "model_state_dict" in state:
+        state = state["model_state_dict"]
 
-    if not os.path.exists(MODEL_PATH):
-        MODEL_PATH = hf_hub_download(
-            repo_id="aryaaaa-exe/audio-deepfake-weights",
-            filename="best_param.pth"
-        )
-
-    state_dict = torch.load(MODEL_PATH, map_location=device)
-
-    model.load_state_dict(state_dict)
-
-    model.to(device)
+    model.load_state_dict(state)
 
     model.eval()
+    return model, device, False, checkpoint_name #demo_mode
 
-    return model
 
-#Prediction Function
-def predict(audio_path):
-    model = load_model()
-    # Load audio
-    waveform = load_audio(audio_path)
-
-    # Preprocess
-    waveform = preprocess_audio(
-        waveform,
-        target_length
-    )
-
-    # Feature Extraction
-    mel = extract_mel_spectrogram(
-        waveform,
-        target_sr
-    )
-
-    # Patch Creation
-    patches = create_patches(mel)
-
-    # Flatten
-    patches = flatten_patches(patches)
-
-    # Add Batch Dimension
-    patches = patches.unsqueeze(0)
-
+def predict(model, device, demo_mode, checkpoint_name, audio_source) -> PredictionResult:
+    waveform, mel, patches = audio_to_model_input(audio_source)
     patches = patches.to(device)
 
-    # Prediction
+    start = time.perf_counter()
     with torch.no_grad():
-
         logits = model(patches)
+        probs = torch.softmax(logits, dim=1)
+    elapsed_ms = (time.perf_counter() - start) * 1000
 
-        probabilities = torch.softmax(
-            logits,
-            dim=1
-        )
+    prob_real = probs[0][0].item() * 100
+    prob_fake = probs[0][1].item() * 100
+    label = "SPOOF" if prob_fake > prob_real else "BONAFIDE"
 
-        confidence, predicted_class = torch.max(
-            probabilities,
-            dim=1
-        )
-
-    predicted_class = predicted_class.item()
-    confidence = confidence.item() * 100
-
-    if predicted_class == 0:
-        label = "Bonafide"
-    else:
-        label = "Spoof"
-
-    mel_filename = f"{uuid.uuid4()}.png"
-
-    mel_path = os.path.join(
-        "static",
-        mel_filename
+    return PredictionResult(
+        label=label,
+        prob_real=prob_real,
+        prob_fake=prob_fake,
+        waveform=waveform,
+        mel=mel,
+        sample_rate=16000,
+        inference_ms=elapsed_ms,
+        demo_mode=demo_mode,
+        checkpoint_name=checkpoint_name,
     )
-
-    plt.figure(figsize=(10,4))
-
-    plt.imshow(
-        mel,
-        origin="lower",
-        aspect="auto",
-        cmap="magma"
-    )
-
-    plt.axis("off")
-
-    plt.tight_layout()
-
-    plt.subplots_adjust(
-        left=0,
-        right=1,
-        top=1,
-        bottom=0
-    )
-
-    plt.savefig(
-        mel_path,
-        dpi=180,
-        bbox_inches="tight",
-        pad_inches=0
-    )
-
-    plt.close()
-
-    return label, confidence, mel_filename
-
-
-#Test
-if __name__ == "__main__":
-
-    audio_path = "sample.flac"      # Replace with your test file
-
-    label, confidence = predict(audio_path)
-
-    print(f"Prediction : {label}")
-    print(f"Confidence : {confidence:.2f}%")
